@@ -60,8 +60,7 @@ try {
     }
 
     if (-not $SkipServe) {
-        & $Config.TailscalePath serve --bg --yes --https=$($Config.HttpsPort) "http://127.0.0.1:$($Config.LocalPort)" | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Tailscale Serve setup failed.' }
+        Set-BridgeServe -Config $Config
         $TailnetStatus = & $Config.TailscalePath status --json | ConvertFrom-Json
         $DnsName = $TailnetStatus.Self.DNSName.TrimEnd('.')
         $RemoteUrl = "https://${DnsName}:$($Config.HttpsPort)/"

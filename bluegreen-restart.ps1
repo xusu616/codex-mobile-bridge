@@ -42,13 +42,7 @@ function Test-CandidateApi([int]$Port) {
 }
 
 function Set-ServeTarget([object]$Config, [int]$LocalPort) {
-    & $Config.TailscalePath serve --bg --yes --https=$($Config.HttpsPort) "http://127.0.0.1:$LocalPort" | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Unable to point Tailscale Serve at port $LocalPort." }
-    $Expected = $Config.PSObject.Copy()
-    $Expected.LocalPort = $LocalPort
-    if (-not (Test-BridgeServe $Expected)) {
-        throw "Tailscale Serve did not confirm port $LocalPort."
-    }
+    Set-BridgeServe -Config $Config -LocalPort $LocalPort
 }
 
 function Get-ProcessId([object]$Process) {

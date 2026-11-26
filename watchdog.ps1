@@ -46,8 +46,7 @@ function Write-WatchdogState([int]$Failures, [string]$FirstFailureAt, [string]$R
 }
 
 function Repair-BridgeServe {
-    & $Config.TailscalePath serve --bg --yes --https=$($Config.HttpsPort) "http://127.0.0.1:$($Config.LocalPort)" | Out-Null
-    if ($LASTEXITCODE -ne 0 -or -not (Test-BridgeServe $Config)) { throw 'Tailscale Serve repair failed.' }
+    Set-BridgeServe -Config $Config
 }
 
 try {

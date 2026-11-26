@@ -69,3 +69,8 @@ test("PowerShell cutover rolls back partial switches and preserves both instance
   const { stdout } = await promisify(execFile)("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", join(import.meta.dirname, "deployment.test.ps1")], { windowsHide: true });
   assert.match(stdout, /deployment tests passed/);
 });
+
+test("PowerShell Serve configuration bounds authorization waits and preserves CLI diagnostics", { skip: process.platform !== "win32" }, async () => {
+  const { stdout } = await promisify(execFile)("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", join(import.meta.dirname, "serve.test.ps1")], { windowsHide: true, timeout: 30_000 });
+  assert.match(stdout, /serve tests passed/);
+});

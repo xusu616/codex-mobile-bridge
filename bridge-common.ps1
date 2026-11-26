@@ -144,6 +144,56 @@ function Get-BridgeHealth([object]$Config, [int]$TimeoutSeconds = 3) {
     }
 }
 
+function Set-BridgeServe {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Config,
+        [ValidateRange(1, 65535)]
+        [int]$LocalPort = $Config.LocalPort,
+        [ValidateRange(1, 300)]
+        [int]$TimeoutSeconds = 30
+    )
+
+    # Serve waits for account-side authorization when the tailnet has not enabled
+    # it. Bound that wait so callers can release the shared lifecycle lock.
+    $StartInfo = [Diagnostics.ProcessStartInfo]::new()
+    $StartInfo.FileName = $Config.TailscalePath
+    $StartInfo.Arguments = "serve --bg --yes --https=$($Config.HttpsPort) http://127.0.0.1:$LocalPort"
+    $StartInfo.UseShellExecute = $false
+    $StartInfo.CreateNoWindow = $true
+    $StartInfo.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
+    $StartInfo.RedirectStandardOutput = $true
+    $StartInfo.RedirectStandardError = $true
+    $Process = [Diagnostics.Process]::new()
+    $Process.StartInfo = $StartInfo
+    try {
+        $null = $Process.Start()
+        # Drain both pipes concurrently; either may fill before the CLI exits.
+        $OutputTask = $Process.StandardOutput.ReadToEndAsync()
+        $ErrorTask = $Process.StandardError.ReadToEndAsync()
+        $TimedOut = -not $Process.WaitForExit($TimeoutSeconds * 1000)
+        if ($TimedOut -and -not $Process.HasExited) { $Process.Kill() }
+        if (-not $Process.WaitForExit(5000)) {
+            throw "Tailscale Serve timed out after $($TimeoutSeconds)s and its process did not exit after termination."
+        }
+        if (-not [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($OutputTask, $ErrorTask), 5000)) {
+            throw 'Tailscale Serve output streams did not close after its process exited.'
+        }
+        $Output = (@($OutputTask.Result, $ErrorTask.Result) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join "`n"
+        $Details = if ($Output) { "`n$($Output.TrimEnd())" } else { '' }
+        if ($TimedOut) { throw "Tailscale Serve timed out after $($TimeoutSeconds)s.$Details" }
+        if ($Process.ExitCode -ne 0) { throw "Tailscale Serve failed (exit code $($Process.ExitCode)).$Details" }
+
+        $Expected = $Config.PSObject.Copy()
+        $Expected.LocalPort = $LocalPort
+        if (-not (Test-BridgeServe $Expected)) {
+            throw "Tailscale Serve returned success but configuration verification failed.$Details"
+        }
+    } finally {
+        $Process.Dispose()
+    }
+}
+
 function Test-BridgeServe([object]$Config) {
     try {
         $Raw = (& $Config.TailscalePath serve status --json 2>$null) -join "`n"
